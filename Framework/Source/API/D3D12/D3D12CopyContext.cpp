@@ -200,7 +200,7 @@ namespace Falcor
         return result;
     }
 
-    static void d3d12ResourceBarrier(const Resource* pResource, Resource::State newState, Resource::State oldState, uint32_t subresourceIndex, ID3D12GraphicsCommandList* pCmdList)
+    static D3D12_RESOURCE_BARRIER d3d12ResourceBarrier(const Resource* pResource, Resource::State newState, Resource::State oldState, uint32_t subresourceIndex, ID3D12GraphicsCommandList* pCmdList)
     {
         D3D12_RESOURCE_BARRIER barrier;
         barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -226,14 +226,19 @@ namespace Falcor
             assert(is_set(pResource->getBindFlags(), Resource::BindFlags::UnorderedAccess));
         }
 
-        pCmdList->ResourceBarrier(1, &barrier);
+        return barrier;
     }
 
-    static bool d3d12GlobalResourceBarrier(const Resource* pResource, Resource::State newState, ID3D12GraphicsCommandList* pCmdList)
+    static bool d3d12GlobalResourceBarrier(const Resource* pResource, Resource::State newState, ID3D12GraphicsCommandList* pCmdList, bool batchingBarriers, std::vector<D3D12_RESOURCE_BARRIER>& batchedBarriers)
     {
         if(pResource->getGlobalState() != newState)
         {
-            d3d12ResourceBarrier(pResource, newState, pResource->getGlobalState(), D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, pCmdList);
+            auto barrier = d3d12ResourceBarrier(pResource, newState, pResource->getGlobalState(), D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, pCmdList);
+            if (batchingBarriers)
+                batchedBarriers.push_back(barrier);
+            else
+                pCmdList->ResourceBarrier(1, &barrier);
+
             return true;
         }
         return false;
@@ -241,7 +246,7 @@ namespace Falcor
 
     void CopyContext::textureBarrier(const Texture* pTexture, Resource::State newState)
     {
-        bool recorded = d3d12GlobalResourceBarrier(pTexture, newState, mpLowLevelData->getCommandList());
+        bool recorded = d3d12GlobalResourceBarrier(pTexture, newState, mpLowLevelData->getCommandList(),mBatchingBarriers, mBatchedBarriers);
         pTexture->setGlobalState(newState);
         mCommandsPending = mCommandsPending || recorded;
     }
@@ -249,7 +254,7 @@ namespace Falcor
     void CopyContext::bufferBarrier(const Buffer* pBuffer, Resource::State newState)
     {
         if (pBuffer && pBuffer->getCpuAccess() != Buffer::CpuAccess::None) return;
-        bool recorded = d3d12GlobalResourceBarrier(pBuffer, newState, mpLowLevelData->getCommandList());
+        bool recorded = d3d12GlobalResourceBarrier(pBuffer, newState, mpLowLevelData->getCommandList(), mBatchingBarriers, mBatchedBarriers);
         pBuffer->setGlobalState(newState);
         mCommandsPending = mCommandsPending || recorded;
     }
@@ -257,7 +262,16 @@ namespace Falcor
     void CopyContext::apiSubresourceBarrier(const Texture* pTexture, Resource::State newState, Resource::State oldState, uint32_t arraySlice, uint32_t mipLevel)
     {
         uint32_t subresourceIndex = pTexture->getSubresourceIndex(arraySlice, mipLevel);
-        d3d12ResourceBarrier(pTexture, newState, oldState, subresourceIndex, mpLowLevelData->getCommandList());
+        auto barrier = d3d12ResourceBarrier(pTexture, newState, oldState, subresourceIndex, mpLowLevelData->getCommandList());
+        if (mBatchingBarriers)
+        {
+            mBatchedBarriers.push_back(barrier);
+        }
+        else
+        {
+            mpLowLevelData->getCommandList()->ResourceBarrier(1, &barrier);
+            mCommandsPending = true;
+        }
     }
 
     void CopyContext::uavBarrier(const Resource* pResource)
@@ -270,22 +284,50 @@ namespace Falcor
         // Check that resource has required bind flags for UAV barrier to be supported
         static const Resource::BindFlags reqFlags = Resource::BindFlags::UnorderedAccess | Resource::BindFlags::AccelerationStructure;
         assert(is_set(pResource->getBindFlags(), reqFlags));
-        mpLowLevelData->getCommandList()->ResourceBarrier(1, &barrier);
-        mCommandsPending = true;
+
+        if (mBatchingBarriers)
+        {
+            mBatchedBarriers.push_back(barrier);
+        }
+        else
+        {
+            mpLowLevelData->getCommandList()->ResourceBarrier(1, &barrier);
+            mCommandsPending = true;
+        }
+    }
+
+    void CopyContext::endBarrierBatch()
+    {
+        assert(mBatchingBarriers);
+        mBatchingBarriers = false;
+
+        if (mBatchedBarriers.size() > 0)
+        {
+            mpLowLevelData->getCommandList()->ResourceBarrier((UINT)mBatchedBarriers.size(), mBatchedBarriers.data());
+            mCommandsPending = true;
+        }
+
+        // Resizing to 0 doesn't delete the underlying memory, which is good in this case
+        mBatchedBarriers.resize(0);
     }
 
     void CopyContext::copyResource(const Resource* pDst, const Resource* pSrc)
     {
+        beginBarrierBatch();
         resourceBarrier(pDst, Resource::State::CopyDest);
         resourceBarrier(pSrc, Resource::State::CopySource);
+        endBarrierBatch();
+
         mpLowLevelData->getCommandList()->CopyResource(pDst->getApiHandle(), pSrc->getApiHandle());
         mCommandsPending = true;
     }
 
     void CopyContext::copySubresource(const Texture* pDst, uint32_t dstSubresourceIdx, const Texture* pSrc, uint32_t srcSubresourceIdx)
     {
+        beginBarrierBatch();
         resourceBarrier(pDst, Resource::State::CopyDest);
         resourceBarrier(pSrc, Resource::State::CopySource);
+        endBarrierBatch();
 
         D3D12_TEXTURE_COPY_LOCATION pSrcCopyLoc;
         D3D12_TEXTURE_COPY_LOCATION pDstCopyLoc;
@@ -304,16 +346,21 @@ namespace Falcor
 
     void CopyContext::copyBufferRegion(const Buffer* pDst, uint64_t dstOffset, const Buffer* pSrc, uint64_t srcOffset, uint64_t numBytes)
     {
+        beginBarrierBatch();
         resourceBarrier(pDst, Resource::State::CopyDest);
         resourceBarrier(pSrc, Resource::State::CopySource);
+        endBarrierBatch();
+
         mpLowLevelData->getCommandList()->CopyBufferRegion(pDst->getApiHandle(), dstOffset, pSrc->getApiHandle(), pSrc->getGpuAddressOffset() + srcOffset, numBytes);    
         mCommandsPending = true;
     }
 
     void CopyContext::copySubresourceRegion(const Texture* pDst, uint32_t dstSubresource, const Texture* pSrc, uint32_t srcSubresource, const uvec3& dstOffset, const uvec3& srcOffset, const uvec3& size)
     {
+        beginBarrierBatch();
         resourceBarrier(pDst, Resource::State::CopyDest);
         resourceBarrier(pSrc, Resource::State::CopySource);
+        endBarrierBatch();
 
         D3D12_TEXTURE_COPY_LOCATION dstLoc = {};
         dstLoc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;

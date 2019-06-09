@@ -187,6 +187,8 @@ namespace Falcor
         // Create an AS for each mesh-group
         for (auto& blasData : mBottomLevelData)
         {
+            pContext->beginBarrierBatch();
+
             std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geomDesc(blasData.meshCount);
             for (size_t meshIndex = blasData.meshBaseIndex; meshIndex < blasData.meshBaseIndex + blasData.meshCount; meshIndex++)
             {
@@ -223,6 +225,8 @@ namespace Falcor
                     desc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
                 }
             }
+
+            pContext->endBarrierBatch();
 
             // Create the acceleration and aux buffers
             D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs = {};

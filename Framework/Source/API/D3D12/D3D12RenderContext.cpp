@@ -113,6 +113,8 @@ namespace Falcor
 
         if (pVao)
         {
+            pCtx->beginBarrierBatch();
+
             // Get the vertex buffers
             for (uint32_t i = 0; i < pVao->getVertexBuffersCount(); i++)
             {
@@ -134,6 +136,8 @@ namespace Falcor
                 ib.Format = getDxgiFormat(pVao->getIndexBufferFormat());
                 pCtx->resourceBarrier(pIB, Resource::State::IndexBuffer);
             }
+
+            pCtx->endBarrierBatch();
         }
 
         pList->IASetVertexBuffers(0, arraysize(vb), vb);
@@ -150,6 +154,8 @@ namespace Falcor
 
         if (pFbo)
         {
+            pCtx->beginBarrierBatch();
+
             for (uint32_t i = 0; i < colorTargets; i++)
             {
                 auto& pTexture = pFbo->getColorTexture(i);
@@ -169,6 +175,8 @@ namespace Falcor
                     pCtx->resourceBarrier(pTexture.get(), Resource::State::DepthStencil);
                 }
             }
+
+            pCtx->endBarrierBatch();
         }
         ID3D12GraphicsCommandList* pCmdList = pCtx->getLowLevelData()->getCommandList().GetInterfacePtr();
         pCmdList->OMSetRenderTargets(colorTargets, pRTV.data(), FALSE, &pDSV);
@@ -517,8 +525,10 @@ namespace Falcor
             logWarning("Can't resolve a resource. The src and dst textures have a different array-size or mip-count");
         }
 
+        beginBarrierBatch();
         resourceBarrier(pSrc.get(), Resource::State::ResolveSource);
         resourceBarrier(pDst.get(), Resource::State::ResolveDest);
+        endBarrierBatch();
 
         uint32_t subresourceCount = pSrc->getMipCount() * pSrc->getArraySize();
         for (uint32_t s = 0; s < subresourceCount; s++)

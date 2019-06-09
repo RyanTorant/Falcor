@@ -28,6 +28,7 @@
 #pragma once
 #include "API/Resource.h"
 #include "API/LowLevel/LowLevelContextData.h"
+#include <vector>
 
 namespace Falcor
 {
@@ -75,6 +76,17 @@ namespace Falcor
         /** Signal the context that we have pending commands. Useful in case you make raw API calls
         */
         void setPendingCommands(bool commandsPending) { mCommandsPending = commandsPending; }
+
+#ifdef FALCOR_D3D12
+        /** Begins to store the barriers in a batch
+            Calling resourceBarrier or uavBarrier will just store the barriers, then endBarrierBatch will submit them in one api call
+        */
+        void beginBarrierBatch() { mBatchingBarriers = true; }
+
+        /** Submit all batched barriers
+        */
+        void endBarrierBatch();
+#endif
 
         /** Insert a resource barrier
             if pViewInfo is nullptr, will transition the entire resource. Otherwise, it will only transition the subresource in the view
@@ -146,5 +158,10 @@ namespace Falcor
         CopyContext() = default;
         bool mCommandsPending = false;
         LowLevelContextData::SharedPtr mpLowLevelData;
+
+#ifdef FALCOR_D3D12
+        bool mBatchingBarriers = false;
+        std::vector<D3D12_RESOURCE_BARRIER> mBatchedBarriers;
+#endif
     };
 }

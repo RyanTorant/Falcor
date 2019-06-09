@@ -182,31 +182,39 @@ namespace Falcor
             return false;
         }
 
-        // Loop over the rays
-        uint32_t hitCount = mpProgram->getHitProgramCount();
-        for (uint32_t h = 0; h < hitCount; h++)
+        // TODO : This works if the hit and miss shaders don't use stuff (for example CBs) that change
+        // Add a flag to the function that's the thing that need to be set per frame
+        //static bool varsSet = false;
+        //if (!varsSet)
         {
-            if(mpProgram->getHitProgram(h))
+            //varsSet = true;
+
+            // Loop over the rays
+            uint32_t hitCount = mpProgram->getHitProgramCount();
+            for (uint32_t h = 0; h < hitCount; h++)
             {
-                for (uint32_t i = 0; i < mpScene->getGeometryCount(hitCount); i++)
+                if (mpProgram->getHitProgram(h))
                 {
-                    uint8_t* pHitRecord = getHitRecordPtr(h, i);
-                    if (!applyRtProgramVars(pHitRecord, mpProgram->getHitProgram(h)->getActiveVersion().get(), pRtso, getHitVars(h)[i].get(), mpRtVarsHelper.get()))
+                    for (uint32_t i = 0; i < mpScene->getGeometryCount(hitCount); i++)
                     {
-                        return false;
+                        uint8_t* pHitRecord = getHitRecordPtr(h, i);
+                        if (!applyRtProgramVars(pHitRecord, mpProgram->getHitProgram(h)->getActiveVersion().get(), pRtso, getHitVars(h)[i].get(), mpRtVarsHelper.get()))
+                        {
+                            return false;
+                        }
                     }
                 }
             }
-        }
 
-        for (uint32_t m = 0; m < mpProgram->getMissProgramCount(); m++)
-        {
-            if(mpProgram->getMissProgram(m))
+            for (uint32_t m = 0; m < mpProgram->getMissProgramCount(); m++)
             {
-                uint8_t* pMissRecord = getMissRecordPtr(m);
-                if (!applyRtProgramVars(pMissRecord, mpProgram->getMissProgram(m)->getActiveVersion().get(), pRtso, getMissVars(m).get(), mpRtVarsHelper.get()))
+                if (mpProgram->getMissProgram(m))
                 {
-                    return false;
+                    uint8_t* pMissRecord = getMissRecordPtr(m);
+                    if (!applyRtProgramVars(pMissRecord, mpProgram->getMissProgram(m)->getActiveVersion().get(), pRtso, getMissVars(m).get(), mpRtVarsHelper.get()))
+                    {
+                        return false;
+                    }
                 }
             }
         }
