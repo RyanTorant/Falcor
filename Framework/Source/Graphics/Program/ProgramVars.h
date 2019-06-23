@@ -138,9 +138,10 @@ namespace Falcor
         /** Bind a texture. Based on the shader reflection, it will be bound as either an SRV or a UAV
             \param[in] name The name of the texture object in the shader
             \param[in] pTexture The texture object to bind
+            \param[in] resourceMIP The mip to use of the resource, -1 for all in the SRV case or first in the UAV case
             \return false is the call failed, otherwise true
         */
-        bool setTexture(const std::string& name, const Texture::SharedPtr& pTexture);
+        bool setTexture(const std::string& name, const Texture::SharedPtr& pTexture, int resourceMIP = -1);
 
         /** Get a texture object.
             \param[in] name The name of the texture

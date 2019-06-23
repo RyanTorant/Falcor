@@ -236,9 +236,9 @@ namespace Falcor
         return mDefaultBlock.pBlock->getUav(loc, arrayIndex);
     }
 
-    bool ProgramVars::setTexture(const std::string& name, const Texture::SharedPtr& pTexture)
+    bool ProgramVars::setTexture(const std::string& name, const Texture::SharedPtr& pTexture, int resourceMIP)
     {
-        return mDefaultBlock.pBlock->setTexture(name, pTexture);
+        return mDefaultBlock.pBlock->setTexture(name, pTexture, resourceMIP);
     }
 
     Texture::SharedPtr ProgramVars::getTexture(const std::string& name) const

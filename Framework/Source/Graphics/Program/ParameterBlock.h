@@ -139,8 +139,9 @@ namespace Falcor
         /** Bind a texture. Based on the shader reflection, it will be bound as either an SRV or a UAV
             \param[in] name The name of the texture object in the shader
             \param[in] pTexture The texture object to bind
+            \param[in] resourceMIP The mip to use of the resource, -1 for all in the SRV case or first in the UAV case
         */
-        bool setTexture(const std::string& name, const Texture::SharedPtr& pTexture);
+        bool setTexture(const std::string& name, const Texture::SharedPtr& pTexture, int resourceMIP = -1);
 
         /** Get a texture object.
             \param[in] name The name of the texture
@@ -257,7 +258,7 @@ namespace Falcor
         bool checkResourceIndices(const BindLocation& bindLocation, uint32_t arrayIndex, DescriptorSet::Type type, const std::string& funcName) const;
 
         std::vector<RootSet> mRootSets;
-        void setResourceSrvUavCommon(std::string name, uint32_t descOffset, DescriptorSet::Type type, const Resource::SharedPtr& pResource, const std::string& funcName);
+        void setResourceSrvUavCommon(std::string name, uint32_t descOffset, DescriptorSet::Type type, const Resource::SharedPtr& pResource, const std::string& funcName, int resourceMIP = -1);
         template<typename ResourceType>
         typename ResourceType::SharedPtr getResourceSrvUavCommon(const std::string& name, uint32_t descOffset, DescriptorSet::Type type, const std::string& funcName) const;
     };

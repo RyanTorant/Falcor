@@ -314,7 +314,7 @@ namespace Falcor
         }
     }
 
-    void ParameterBlock::setResourceSrvUavCommon(std::string name, uint32_t descOffset, DescriptorSet::Type type, const Resource::SharedPtr& pResource, const std::string& funcName)
+    void ParameterBlock::setResourceSrvUavCommon(std::string name, uint32_t descOffset, DescriptorSet::Type type, const Resource::SharedPtr& pResource, const std::string& funcName, int resourceMIP)
     {
         uint32_t index;
         while (parseArrayIndex(name, name, index)) {};
@@ -326,17 +326,26 @@ namespace Falcor
 
         desc.pResource = pResource;
 
+        int mipCount = Texture::kMaxPossible;
+        int mostDetailedMip = 0;
+
+        if (resourceMIP != -1)
+        {
+            mipCount = 1;
+            mostDetailedMip = resourceMIP;
+        }
+
         switch (type)
         {
         case DescriptorSet::Type::TextureSrv:
         case DescriptorSet::Type::TypedBufferSrv:
         case DescriptorSet::Type::StructuredBufferSrv:
-            desc.pSRV = pResource ? pResource->getSRV() : ShaderResourceView::getNullView();
+            desc.pSRV = pResource ? pResource->getSRV(mostDetailedMip,mipCount) : ShaderResourceView::getNullView();
             break;
         case DescriptorSet::Type::TextureUav:
         case DescriptorSet::Type::TypedBufferUav:
         case DescriptorSet::Type::StructuredBufferUav:
-            desc.pUAV = pResource ? pResource->getUAV() : UnorderedAccessView::getNullView();
+            desc.pUAV = pResource ? pResource->getUAV(resourceMIP) : UnorderedAccessView::getNullView();
             break;
         default:
             should_not_get_here();
@@ -494,7 +503,7 @@ namespace Falcor
         return mAssignedResources[bindLocation.setIndex][bindLocation.rangeIndex][arrayIndex].pUAV;
     }
 
-    bool ParameterBlock::setTexture(const std::string& name, const Texture::SharedPtr& pTexture)
+    bool ParameterBlock::setTexture(const std::string& name, const Texture::SharedPtr& pTexture, int resourceMIP)
     {
         const ReflectionVar::SharedConstPtr pVar = mpReflector->getResource(name);
 
@@ -506,7 +515,7 @@ namespace Falcor
 #endif
 
         DescriptorSet::Type type = getSetTypeFromVar(pVar, DescriptorSet::Type::TextureSrv, DescriptorSet::Type::TextureUav);
-        setResourceSrvUavCommon(name, pVar->getDescOffset(), type, pTexture, "setTexture()");
+        setResourceSrvUavCommon(name, pVar->getDescOffset(), type, pTexture, "setTexture()", resourceMIP);
         return true;
     }
 
