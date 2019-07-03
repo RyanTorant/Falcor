@@ -43,8 +43,8 @@ namespace Falcor
         static SharedPtr create(RtScene::SharedPtr pScene);
 
         deprecate("3.3", "Ray dispatch now accepts depth as a parameter. Using the deprecated version will assume depth = 1.")
-        void renderScene(RenderContext* pContext, std::shared_ptr<RtProgramVars> pRtVars, std::shared_ptr<RtState> pState, uvec2 targetDim, Camera* pCamera = nullptr);
-        void renderScene(RenderContext* pContext, std::shared_ptr<RtProgramVars> pRtVars, std::shared_ptr<RtState> pState, uvec3 targetDim, Camera* pCamera = nullptr);
+        void renderScene(RenderContext* pContext, std::shared_ptr<RtProgramVars> pRtVars, std::shared_ptr<RtState> pState, uvec2 targetDim, Camera* pCamera = nullptr, bool setHitData = true, bool setMissData = true);
+        void renderScene(RenderContext* pContext, std::shared_ptr<RtProgramVars> pRtVars, std::shared_ptr<RtState> pState, uvec3 targetDim, Camera* pCamera = nullptr, bool setHitData = true, bool setMissData = true);
     protected:
         RtSceneRenderer(RtScene::SharedPtr pScene) : SceneRenderer(pScene) {}
         struct InstanceData

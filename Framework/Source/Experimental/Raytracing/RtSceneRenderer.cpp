@@ -155,12 +155,12 @@ namespace Falcor
         }
     }
 
-    void RtSceneRenderer::renderScene(RenderContext* pContext, RtProgramVars::SharedPtr pRtVars, RtState::SharedPtr pState, uvec2 targetDim, Camera* pCamera)
+    void RtSceneRenderer::renderScene(RenderContext* pContext, RtProgramVars::SharedPtr pRtVars, RtState::SharedPtr pState, uvec2 targetDim, Camera* pCamera, bool setHitData, bool setMissData)
     {
-        renderScene(pContext, pRtVars, pState, uvec3(targetDim, 1), pCamera);
+        renderScene(pContext, pRtVars, pState, uvec3(targetDim, 1), pCamera, setHitData, setMissData);
     }
 
-    void RtSceneRenderer::renderScene(RenderContext* pContext, RtProgramVars::SharedPtr pRtVars, RtState::SharedPtr pState, uvec3 targetDim, Camera* pCamera)
+    void RtSceneRenderer::renderScene(RenderContext* pContext, RtProgramVars::SharedPtr pRtVars, RtState::SharedPtr pState, uvec3 targetDim, Camera* pCamera, bool setHitData, bool setMissData)
     {
         InstanceData data;
         data.currentData.pCamera = pCamera == nullptr ? mpScene->getActiveCamera().get() : pCamera;
@@ -174,36 +174,43 @@ namespace Falcor
         setRayGenShaderData(pRtVars.get(), data);
         setGlobalData(pRtVars.get(), data);
 
-        // Set the miss-shader data
-        for (data.progId = 0; data.progId < pRtVars->getMissProgramsCount(); data.progId++)
+        if (setMissData)
         {
-            if(pRtVars->getMissVars(data.progId))
+            // Set the miss-shader data
+            for (data.progId = 0; data.progId < pRtVars->getMissProgramsCount(); data.progId++)
             {
-                setMissShaderData(pRtVars.get(), data);
+                if (pRtVars->getMissVars(data.progId))
+                {
+                    setMissShaderData(pRtVars.get(), data);
+                }
             }
         }
 
-        // Set the hit-shader data
-        for(data.progId = 0 ; data.progId < hitCount ; data.progId++)
+        if(setHitData)
         {
-            if(pRtVars->getHitVars(data.progId).empty()) continue;
-            for (data.model = 0; data.model < mpScene->getModelCount(); data.model++)
+            // Set the hit-shader data
+            for (data.progId = 0; data.progId < hitCount; data.progId++)
             {
-                const Model* pModel = mpScene->getModel(data.model).get();
-                data.currentData.pModel = pModel;
-                for (data.modelInstance = 0; data.modelInstance < mpScene->getModelInstanceCount(data.model); data.modelInstance++)
+                if (pRtVars->getHitVars(data.progId).empty()) continue;
+                for (data.model = 0; data.model < mpScene->getModelCount(); data.model++)
                 {
-                    for (data.mesh = 0; data.mesh < pModel->getMeshCount(); data.mesh++)
+                    const Model* pModel = mpScene->getModel(data.model).get();
+                    data.currentData.pModel = pModel;
+                    for (data.modelInstance = 0; data.modelInstance < mpScene->getModelInstanceCount(data.model); data.modelInstance++)
                     {
-                        const Mesh* pMesh = pModel->getMesh(data.mesh).get();
-                        for (data.meshInstance = 0; data.meshInstance < pModel->getMeshInstanceCount(data.mesh); data.meshInstance++)
+                        for (data.mesh = 0; data.mesh < pModel->getMeshCount(); data.mesh++)
                         {
-                            setHitShaderData(pRtVars.get(), data);
+                            const Mesh* pMesh = pModel->getMesh(data.mesh).get();
+                            for (data.meshInstance = 0; data.meshInstance < pModel->getMeshInstanceCount(data.mesh); data.meshInstance++)
+                            {
+                                setHitShaderData(pRtVars.get(), data);
+                            }
                         }
                     }
                 }
             }
         }
+
 
         if (!pRtVars->apply(pContext, pState->getRtso().get()))
         {
