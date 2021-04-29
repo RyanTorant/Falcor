@@ -285,6 +285,39 @@ float calcShadowFactorWithCascadeIdx(CsmData csmData, uint32_t cascadeIndex, flo
     }
 }
 
+// Always uses HW PCF and doesn't do blending
+float calcShadowFactorForSampling(CsmData csmData, float3 posW, float3 cameraPosW)
+{
+    //this is wrong! need to convert the distance to be consistent with clip space depth!
+    int cascadeIndex = getCascadeIndex(csmData, distance(posW,cameraPosW));
+
+    // Apply normal offset
+    //posW.xyz += calcNormalOffset(csmData, normal, cascadeIndex);
+
+    // Get the global shadow space position
+    float4 shadowPos = mul(float4(posW, 1), csmData.globalMat);
+    shadowPos /= shadowPos.w;
+
+    // Calculate the scale and offset
+    float3 scale = csmData.cascadeScale[cascadeIndex].xyz;
+    scale.xy *= 0.5;
+    float3 offset = csmData.cascadeOffset[cascadeIndex].xyz;
+    offset.xy = (offset.xy + 1) * 0.5;
+
+    // Apply the scale and offset to the derivatives and the position
+    shadowPos.xyz = shadowPos.xyz * scale + offset;
+
+#ifdef FALCOR_D3D
+    shadowPos.y = 1 - shadowPos.y;
+#endif
+
+    // Calculate the texC
+    shadowPos.z -= csmData.depthBias;
+    shadowPos.z = saturate(shadowPos.z);
+
+    return csmFilterUsingHW(csmData, shadowPos.xy, shadowPos.z, cascadeIndex);
+}
+
 bool getCascadeParamsAndCheckForBlend(CsmData csmData, float cameraDepth, out int cascadeIndex, out float weight)
 {
     cascadeIndex = 0;
